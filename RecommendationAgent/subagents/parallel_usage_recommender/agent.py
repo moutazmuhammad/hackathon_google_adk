@@ -7,8 +7,6 @@ from google.adk.tools.bigquery.config import BigQueryToolConfig, WriteMode
 from google.adk.agents import ParallelAgent
 from google.adk.agents import SequentialAgent
 
-
-
 client = bigquery.Client()
 application_default_credentials, _ = google.auth.default()
 
