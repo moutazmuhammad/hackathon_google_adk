@@ -28,114 +28,12 @@ bigquery_toolset = BigQueryToolset(
 GEMINI_MODEL = "gemini-2.5-flash"
 
 
-def get_user_usage(user_email: str) -> dict:
-    try:
-        query = """
-        SELECT 
-            AVG(calls_minutes) AS avg_calls,
-            AVG(sms_count) AS avg_sms,
-            AVG(data_gb) AS avg_data
-        FROM `vf-mc2dev-ca-nonlive.vodafone_hackathon.user_usage`
-        WHERE user_email = @user_email
-          AND month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
-        """
-
-        # Dry run to estimate cost
-        dry_run_config = bigquery.QueryJobConfig(
-            query_parameters=[bigquery.ScalarQueryParameter("user_email", "STRING", user_email)],
-            dry_run=True,
-            use_query_cache=False,
-        )
-        dry_run_job = client.query(query, job_config=dry_run_config)
-        bytes_billed = dry_run_job.total_bytes_billed
-        max_bytes = 104857600  # 100 MB limit
-
-        if bytes_billed > max_bytes:
-            logging.error(f"Query exceeds max bytes: {bytes_billed}")
-            return {"error": f"Query too costly: estimated {bytes_billed} > {max_bytes}"}
-
-        # Actual execution
-        exec_config = bigquery.QueryJobConfig(
-            query_parameters=[bigquery.ScalarQueryParameter("user_email", "STRING", user_email)],
-            dry_run=False,
-        )
-        result = client.query(query, job_config=exec_config).result()
-
-        for row in result:
-            if row.avg_calls is not None:
-                logging.info(f"Retrieved usage for {user_email}")
-                return {
-                    "user_email": user_email,
-                    "avg_calls": row.avg_calls,
-                    "avg_sms": row.avg_sms,
-                    "avg_data": row.avg_data,
-                }
-
-        logging.warning(f"No usage data found for {user_email}")
-        return {}
-
-    except Exception as e:
-        logging.error(f"Error retrieving usage for {user_email}: {e}", exc_info=True)
-        return {}
-
-
-def get_plans(_: str = "") -> list[dict]:
-
-    try:
-        query = """
-        SELECT 
-            plan_name,
-            calls_limit,
-            sms_limit,
-            data_limit,
-            price,
-            benefits
-        FROM `vf-mc2dev-ca-nonlive.vodafone_hackathon.plans`
-        LIMIT 100
-        """
-
-        dry_run_config = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
-        dry_run_job = client.query(query, job_config=dry_run_config)
-        bytes_billed = dry_run_job.total_bytes_billed
-        max_bytes = 104857600  # 100 MB limit
-
-        if bytes_billed > max_bytes:
-            logging.error(f"Plans query exceeds max bytes: {bytes_billed}")
-            return [{"error": f"Query too costly: estimated {bytes_billed} > {max_bytes}"}]
-
-        # Actual execution
-        exec_config = bigquery.QueryJobConfig(dry_run=False)
-        result = client.query(query, job_config=exec_config).result()
-
-        plans = [
-            {
-                "plan_name": row.plan_name,
-                "calls_limit": row.calls_limit,
-                "sms_limit": row.sms_limit,
-                "data_limit": row.data_limit,
-                "price": row.price,
-                "benefits": row.benefits,
-            }
-            for row in result
-        ]
-
-        logging.info("Successfully retrieved plans")
-        return plans
-
-    except Exception as e:
-        logging.error(f"Error retrieving plans: {e}", exc_info=True)
-        return []
-
-
-get_plans_tool = FunctionTool(get_plans)
-get_user_usage_tool = FunctionTool(get_user_usage)
-
 lead_user_usage_agent = LlmAgent(
     name="LeadUsageAgent",
     model=GEMINI_MODEL,
     instruction=instruction.usage_instruction,
     description="",
-    tools=[bigquery_toolset, get_user_usage_tool],
+    tools=[bigquery_toolset],
     output_key="usage_status",
 )
 
@@ -144,7 +42,7 @@ lead_plan_agent = LlmAgent(
     model=GEMINI_MODEL,
     instruction=instruction.plan_instruction,
     description="",
-    tools=[get_plans_tool],
+    tools=[bigquery_toolset],
     output_key="plans_list",
 )
 
