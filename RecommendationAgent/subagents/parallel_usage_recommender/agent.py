@@ -1,9 +1,7 @@
 from . import instruction
 import google.auth
 from google.cloud import bigquery
-import logging
 from google.adk.agents import LlmAgent
-from google.adk.tools.function_tool import FunctionTool
 from google.adk.tools.bigquery import BigQueryCredentialsConfig, BigQueryToolset
 from google.adk.tools.bigquery.config import BigQueryToolConfig, WriteMode
 from google.adk.agents import ParallelAgent
@@ -26,7 +24,6 @@ bigquery_toolset = BigQueryToolset(
 )
 
 GEMINI_MODEL = "gemini-2.5-flash"
-
 
 lead_user_usage_agent = LlmAgent(
     name="LeadUsageAgent",
